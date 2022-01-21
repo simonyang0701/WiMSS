@@ -1,0 +1,418 @@
+Phase 3 TeamInfo|Team 020
+
+Team members: 
+Yulu Wang (ywang974@gatech.edu), Kai Tian (ktian36@gatech.edu), 
+Xingyu Ren (xren65@gatech.edu), Tianyu Yang (tyang372@gatech.edu), 
+Boxuan Li (bli437@gatech.edu)  
+
+
+This file includes the path of files necessary for the implementation of our project phase 3 and the combined SQL queries used to produce the results. 
+
+
+-- Path --
+1. Log in: 
+    /Phase_3/WiMSS/user/validate_login.php
+                
+2. Main Screen: 
+    /Phase_3/WiMSS/main_screen/main_page.php
+
+
+3. Store Details:
+    /Phase_3/WiMSS/store_detail/store_detail.php
+
+
+4. Update City Population: 
+    /Phase_3/WiMSS/main_screen/main_page.php
+
+
+5. Manufacturer’s Product:   
+    /Phase_3/WiMSS/manufacture/manufacture_manager.php
+
+
+6. Category Report Screen: 
+    /Phase_3/WiMSS/category_report/category.php
+
+
+7. Actual vs. Predicted Revenue Report: 
+    /Phase_3/WiMSS/revenue_compare/revenue_compare.php
+
+
+8. Store Revenue by Year by State Report: 
+    /Phase_3/WiMSS/store_revenue/store_revenue.php
+
+
+9. Outdoor Furniture on Groundhog Day Report
+    /Phase_3/WiMSS/outdoorFurniture/outdoorFurniture_manager.php
+
+
+10. State with Highest Volume for each Category Report 
+    /Phase_3/WiMSS/stateHighest/stateHighest_manager.php
+
+
+11. Revenue by Population Report Screen
+    /Phase_3/WiMSS/revenuePopulation/revenuePopulation_manager.php
+ 
+
+12. Grand Showcase Store Revenue Comparison Report
+    /Phase_3/WiMSS/grandRevenue/grand_showcase_rev_comparison.php
+
+
+13. Grand Showcase Store Category Comparison Report Screen
+    /Phase_3/WiMSS/grandCategory/grand_showcase_category_comparison.php
+
+
+
+
+-- SQL Queries -- 
+1. Log in
+
+SELECT Username from User WHERE Username = '$username' AND Password = '$userpass';
+
+​​SELECT Username from Marketing WHERE Username = '$username';
+
+SELECT Username from Read_Only_Corporate WHERE Username = '$username';
+
+       
+2. Main Screen: 
+
+SELECT COUNT(Store_number) FROM Store;
+
+SELECT COUNT(Store_number) FROM Store WHERE If_showcase = 1;
+
+SELECT COUNT(Manufacturer_name) FROM Manufacturer;
+
+SELECT COUNT(PID) FROM Product;
+
+SELECT COUNT(Date) FROM Special_Saving_Day;
+
+SELECT COUNT(Store_number) FROM Manage WHERE Username = '" . $username . "';
+
+SELECT Population
+               FROM City
+               WHERE City_name = '$city' AND State = '$state';
+
+UPDATE City
+   SET Population = '$new_population'
+   WHERE City_name = '$city' AND State = '$state';
+
+
+3. Store Details:
+
+SELECT S.Store_number, S.Phone_number, S.Street_address, S.If_showcase
+               FROM Store S INNER JOIN Manage M on S.Store_number = M.Store_number WHERE M.Username = '" . $username . "';
+
+
+4. Update City Population:
+
+SELECT Population FROM City WHERE City_name = '$city' AND State = '$state';
+
+UPDATE City SET Population = '$new_population' WHERE City_name = '$city' AND State = '$state';
+
+
+5. Manufacturer’s Product:
+
+SELECT Manufacturer_name, COUNT(PID) AS Cnt_product, AVG(Retail_price) AS Avg_price, MIN(Retail_price) AS Min_price, MAX(Retail_price) AS Max_price
+FROM Product
+GROUP BY Manufacturer_name
+ORDER BY Avg_price DESC 
+LIMIT 100;
+
+SELECT PF.PID, PF.Product_name, C.Categories, PF.Retail_price
+FROM (SELECT PID, Product_name, Retail_price FROM Product
+WHERE Manufacturer_name = '$name') AS PF
+LEFT JOIN (SELECT PID, GROUP_CONCAT(Category_name) AS Categories
+FROM Assigned_to GROUP BY PID) AS C
+ON PF.PID = C.PID
+ORDER BY PF.Retail_price DESC;
+
+
+6. Category Report Screen
+
+SELECT C.Category_name, COUNT(C.PID) AS Cnt, ifnull(MIN(P.Retail_price),'N/A') AS MinP, ifnull(MAX(P.Retail_price),'N/A') AS MaxP, ifnull(AVG(P.Retail_price),'N/A') AS AvgP
+FROM(
+SELECT Category.Category_name, Assigned_to.PID FROM
+Category LEFT JOIN Assigned_to
+ON Category.Category_name = Assigned_to.Category_name) AS C
+LEFT JOIN Product AS P
+ON C.PID = P.PID
+GROUP BY C.Category_name
+ORDER BY C.Category_name;
+
+
+7. Actual vs. Predicted Revenue Report
+
+SELECT PD.PID, PD.Product_name, PD.Retail_price, ifnull(PT.Total_number_ever_sold,0) AS Total_number_ever_sold, PD.Total_number_sold_at_discount, ifnull(PT.Total_number_ever_sold,0) - PD.Total_number_sold_at_discount AS Total_number_sold_at_retail_price, PD.Actual_revenue, PD.Predicted_revenue, PD.Revenue_difference
+FROM
+(
+(SELECT P.PID, P.Product_name, P.Retail_price, SUM(ifnull(D.Quantity,0) * ifnull(D.Discount_price,0)) AS Actual_revenue, SUM(ifnull(D.Quantity,0) * 0.75 * P.Retail_price) AS Predicted_revenue, SUM(ifnull(D.Quantity,0)) AS Total_number_sold_at_discount, SUM(ifnull(D.Quantity,0) * ifnull(D.Discount_price,0)) - SUM(ifnull(D.Quantity,0) * 0.75 * P.Retail_price) AS Revenue_difference
+FROM
+(SELECT Product.PID, Product.Retail_price, Product.Product_name
+FROM (Product INNER JOIN Assigned_to ON Product.PID = Assigned_to.PID)
+WHERE Category_name = 'Couches and sofas'
+) AS P
+LEFT JOIN
+(SELECT Sells.PID, Sells.Date, Sells.Quantity, Discounted_sale.Discount_price
+FROM (Sells INNER JOIN Discounted_sale ON Sells.PID = Discounted_sale.PID AND Sells.Date = Discounted_sale.Date )
+) AS D
+ON P.PID = D.PID
+GROUP BY P.PID
+) AS PD
+LEFT JOIN
+(SELECT P2.PID, SUM(Sells.Quantity) AS Total_number_ever_sold
+FROM (
+(SELECT Product.PID, Product.Retail_price, Product.Product_name
+FROM (Product INNER JOIN Assigned_to ON Product.PID = Assigned_to.PID)
+WHERE Category_name = 'Couches and sofas'
+) AS P2 
+INNER JOIN Sells 
+ON P2.PID = Sells.PID)
+GROUP BY P2.PID
+)AS PT
+ON PD.PID = PT.PID
+)
+WHERE PD.Revenue_difference > 5000 OR PD.Revenue_difference < -5000
+ORDER BY PD.Revenue_difference DESC;
+
+
+8. Store Revenue by Year by State Report 
+
+SELECT PR.Store_number, PR.Street_address, PR.City_name, PR.Sale_year, ROUND(SUM(PR.Revenue * (1 - ifnull(SSD.Percent_discount, 0) / 100)),2) AS Total_revenue
+FROM
+(SELECT INTER1.Store_number, INTER1.Street_address, INTER1.City_name,INTER1.PID, INTER1.Date, INTER1.Sale_year, INTER1.Quantity * ifnull(INTER1.Price,P1.Retail_price) AS Revenue
+FROM
+(
+SELECT SS.Store_number, SS.Street_address, SS.City_name,SS.PID, SS.Date, SS.Sale_year, SS.Quantity, DS1.Discount_price AS Price
+FROM 
+(SELECT Store.Store_number, Store.Street_address, Store.City_name, Sells.PID, Sells.Date, YEAR(Sells.Date) AS Sale_year, Sells.Quantity
+FROM (Store LEFT JOIN Sells ON Store.Store_number = Sells.Store_number)
+WHERE Store.State = '$state'
+) AS SS
+LEFT JOIN discounted_sale DS1
+ON (SS.PID, SS.Date) = (DS1.PID, DS1.Date)
+) AS INTER1 
+LEFT JOIN Product P1
+ON INTER1.PID = P1.PID) AS PR
+LEFT JOIN
+Special_Saving_Day AS SSD
+ON PR.Date = SSD.Date
+GROUP BY PR.Sale_year, PR.Store_number
+ORDER BY PR.Sale_year, Total_revenue Desc;
+
+
+9. Outdoor Furniture on Groundhog Day Report
+
+SELECT Year, Total_Year, Avg_Year, Groundhog FROM(
+    SELECT YEAR(sells.Date) AS Year, SUM(Quantity) AS Total_Year, SUM(Quantity) / 365 AS Avg_Year
+    FROM sells INNER JOIN assigned_to ON sells.PID = assigned_to.PID
+    WHERE assigned_to.Category_name = 'Outdoor Furniture'
+    GROUP BY Year
+    ) AS A INNER JOIN (
+    SELECT YEAR(sells.Date) AS Year1, Sum(sells.Quantity) as Groundhog
+    FROM sells INNER JOIN assigned_to ON sells.PID = assigned_to.PID
+    WHERE assigned_to.Category_name = 'Outdoor Furniture' AND MONTH(sells.Date) = 2 AND DAY(sells.Date) = 2
+    GROUP BY Year1
+    ) AS B
+    ON A.Year = B.Year1
+ORDER BY Year;
+
+
+10. State with Highest Volume for each Category Report 
+
+SELECT Category_name AS 'Category Name', State, Total_sold AS 'Number of Sold Units' FROM
+(SELECT ROW_NUMBER() OVER (PARTITION BY Category_name ORDER BY Total_sold DESC) as RowNum, Category_name, State, Total_sold
+FROM
+(SELECT INTER1.Category_name, INTER1.State, SUM(INTER1.Quantity) AS Total_sold
+FROM
+(SELECT Category_name, State, Quantity
+FROM 
+((sells SE1 LEFT JOIN assigned_to A1
+ON SE1.PID = A1.PID)
+LEFT JOIN 
+store ST1 ON SE1.Store_number = ST1.Store_number
+)
+WHERE MONTH(SE1.Date) = " . $month . " and YEAR(SE1.Date) = " . $year . ") AS INTER1
+GROUP BY INTER1.Category_name, INTER1.State) AS INTER2
+) AS INTER3
+WHERE RowNum = 1;
+
+
+11. Revenue by Population Report Screen
+
+SELECT city_size, YEAR(CS.Date) AS Year, 
+        SUM(CASE WHEN sell_price IS NOT NULL
+            THEN sell_price * Quantity
+        ELSE Retail_price * Quantity
+    END) AS Revenue
+FROM
+(SELECT sells.PID, sells.Quantity, A.city_size, sells.Date, product.Retail_price FROM
+sells INNER JOIN
+(SELECT store.Store_number,
+    CASE WHEN city.Population < 3700000
+        THEN 'SMALL'
+        WHEN city.Population >= 3700000 AND city.Population < 6700000
+        THEN 'MEDIUM'
+        WHEN city.Population >= 6700000 AND city.Population < 9000000
+        THEN 'LARGE'
+         WHEN city.Population >= 9000000
+        THEN 'EXTRA LARGE'
+    END AS city_size
+FROM store INNER JOIN city ON store.City_name = city.City_name) AS A ON sells.Store_number = A.Store_number
+INNER JOIN product ON sells.PID = product.PID) AS CS
+LEFT JOIN
+(SELECT TP.PID, discounted_sale.Date,
+         ROUND(CASE WHEN special_saving_day.Percent_discount IS NOT NULL AND Discount_price IS NOT NULL THEN Discount_price * (100-Percent_discount)/100 
+                 WHEN special_saving_day.Percent_discount IS NULL AND Discount_price IS NOT NULL THEN Discount_price
+         END) AS sell_price From
+   (SELECT DISTINCT sells.PID, product.Retail_price 
+    FROM sells INNER JOIN product ON sells.PID = product.PID ) AS TP 
+            JOIN discounted_sale ON TP.PID = discounted_sale.PID 
+             LEFT JOIN special_saving_day ON discounted_sale.Date = special_saving_day.Date) as SP
+ON CS.PID = SP.PID AND CS.Date = SP.Date
+GROUP BY city_size, Year
+ORDER BY Year, city_size DESC;
+
+
+12. Grand Showcase Store Revenue Comparison Report
+
+# Count of Grand Showcase Stores
+SELECT COUNT(Store_number) FROM Store WHERE If_showcase = 1;
+
+# Count of Grand Showcase Stores
+SELECT COUNT(Store_number) FROM Store WHERE If_showcase = 0;
+
+# Get the minimum, average, maximum, and total revenue of all Grand Showcase stores and non-Grand Showcase
+SELECT GrandYR.Year, GminR, GavgR, GmaxR, GtotalR, RminR, RavgR, RmaxR, RtotalR
+FROM
+(SELECT Year, ROUND(min(Revenue),2) AS GminR, ROUND(max(Revenue),2) AS GmaxR, ROUND(sum(Revenue),2) AS GtotalR, ROUND(avg(Revenue),2) AS GavgR
+FROM
+(SELECT INTER2.Year, INTER2.Store_number, SUM((INTER2.Quantity * INTER2.Price *(1 - INTER2.Percent_discount/100)))AS Revenue
+FROM
+(SELECT GrandQ.Store_number, YEAR(INTER1.Date) AS YEAR, INTER1.Quantity, IFNULL(INTER1.Price, P1.Retail_price) AS Price, IFNULL(SSD.Percent_discount, 0) AS Percent_discount
+FROM
+(
+(
+(
+(SELECT S.Store_number, S.PID, S.Date, S.Quantity, DS.Discount_price AS Price
+FROM
+Sells S
+LEFT JOIN Discounted_Sale DS
+ON (S.PID,S.Date) = (DS.PID,DS.Date)
+)
+AS INTER1
+LEFT JOIN Product P1
+ON INTER1.PID = P1.PID)
+LEFT JOIN Special_Saving_Day SSD 
+ON INTER1.Date = SSD.Date) 
+INNER JOIN 
+(SELECT Store.Store_number, Store.If_showcase
+FROM Store
+WHERE If_showcase = 1) AS GrandQ
+ON INTER1.Store_number = GrandQ.Store_number)
+) AS INTER2
+GROUP BY Year, Store_number
+) AS INTER3
+GROUP BY Year)
+AS GrandYR
+INNER JOIN
+(SELECT Year, ROUND(min(Revenue),2) AS RminR, ROUND(max(Revenue),2) AS RmaxR, ROUND(sum(Revenue),2) AS RtotalR, ROUND(avg(Revenue),2) AS RavgR
+FROM
+(SELECT INTER2.Year, INTER2.Store_number, SUM((INTER2.Quantity * INTER2.Price *(1 - INTER2.Percent_discount/100)))AS Revenue
+FROM
+(SELECT RegularQ.Store_number, YEAR(INTER 1.Date) AS YEAR, INTER1.Quantity, IFNULL(INTER1.Price, P1.Retail_price) AS Price, IFNULL(SSD.Percent_discount, 0) AS Percent_discount
+FROM
+(
+(
+(
+(SELECT S.Store_number, S.PID, S.Date, S.Quantity, DS.Discount_price AS Price
+FROM
+Sells S
+LEFT JOIN Discounted_Sale DS
+ON (S.PID,S.Date) = (DS.PID,DS.Date)
+)
+AS INTER1
+LEFT JOIN Product P1
+ON INTER1.PID = P1.PID)
+LEFT JOIN Special_Saving_Day SSD 
+ON INTER1.Date = SSD.Date) 
+INNER JOIN 
+(SELECT Store.Store_number, Store.If_showcase
+FROM Store
+WHERE If_showcase = 0) AS RegularQ
+ON INTER1.Store_number = RegularQ.Store_number)
+) AS INTER2
+GROUP BY Year, Store_number
+) AS INTER3
+GROUP BY Year)
+AS RegularYR
+ON GrandYR.Year = RegularYR.Year
+ORDER BY GrandYR.Year ASC;
+
+
+13. Grand Showcase Store Category Comparison Report
+
+# Get Grand Showcase store Qty and Non-Grand Showcase store Qty for each categories and their difference
+
+SELECT  GrandQ.Category_name, Grand_Showcase_Qty, Regular_Qty,  Grand_Showcase_Qty - Regular_Qty as Q_difference
+FROM
+(SELECT Asg.Category_name, SUM(Quantity) AS Grand_Showcase_Qty 
+FROM
+(SELECT Store_number FROM Store
+WHERE Store.If_showcase = 1) AS GrandS
+INNER JOIN Sells 
+ON GrandS.Store_number = Sells.Store_number
+INNER JOIN Assigned_to Asg
+ON Sells.PID = Asg.PID
+GROUP BY Asg.Category_name) AS GrandQ
+INNER JOIN
+(SELECT Asg.Category_name, SUM(Quantity) AS Regular_Qty 
+FROM
+(SELECT Store_number FROM Store
+WHERE Store.If_showcase = 0) AS RegularS
+INNER JOIN Sells 
+ON RegularS.Store_number = Sells.Store_number
+INNER JOIN Assigned_to Asg
+ON Sells.PID = Asg.PID
+GROUP BY Asg.Category_name) AS RegularQ
+ON GrandQ.Category_name = RegularQ.Category_name
+ORDER BY Q_difference DESC;
+
+# Get drill-down for each category
+
+WITH Product_CTE 
+(Product_ID, Product_name, Grand_Showcase_Qty, Regular_Qty, Q_difference)
+AS(
+SELECT GrandQ.PID AS Product_ID, GrandQ.Product_name, GrandQ.Grand_Showcase_Qty, RegularQ.Regular_Qty, GrandQ.Grand_Showcase_Qty - RegularQ.Regular_Qty as Q_difference
+FROM
+(SELECT P.PID, P.Product_name, SUM(ifnull(Sells.Quantity, 0)) AS Grand_Showcase_Qty 
+FROM Product P
+INNER JOIN 
+(SELECT * FROM Assigned_to WHERE Category_name = '$category')
+AS Assg
+ON P.PID = Assg.PID
+LEFT JOIN Sells
+ON P.PID = Sells.PID
+INNER JOIN
+(SELECT * FROM Store
+WHERE Store.If_showcase = 1) AS GrandS
+ON GrandS.Store_number = Sells.Store_number
+GROUP BY P.PID) AS GrandQ
+INNER JOIN
+(SELECT P.PID, P.Product_name, SUM(ifnull(Sells.Quantity, 0)) AS Regular_Qty 
+FROM Product P
+INNER JOIN 
+(SELECT * FROM Assigned_to WHERE Category_name = '$category') AS Assg
+ON P.PID = Assg.PID
+LEFT JOIN Sells
+ON P.PID = Sells.PID
+INNER JOIN
+(SELECT * FROM Store
+WHERE Store.If_showcase = 0) AS RegularS
+ON RegularS.Store_number = Sells.Store_number
+GROUP BY P.PID) AS RegularQ
+ON GrandQ.PID = RegularQ.PID)
+(SELECT * FROM Product_CTE
+ORDER BY Q_difference DESC, Product_ID ASC LIMIT 5)
+UNION
+(SELECT * FROM Product_CTE
+ORDER BY Q_difference ASC, Product_ID ASC LIMIT 5)
+ORDER BY Q_difference DESC, Product_ID ASC;
